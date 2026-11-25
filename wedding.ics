@@ -1,0 +1,15 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Akshay and Yashada//Wedding Invitation//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:20270228T064400Z-akshay-yashada@akshaykarvi2605-svg.github.io
+DTSTAMP:20261125T000000Z
+DTSTART:20270228T064400Z
+SUMMARY:Akshay Karvi and Yashada Ghady's Wedding
+DESCRIPTION:Wedding Muhurtham at 12:14 PM IST.
+LOCATION:Avyaya\, K.T. Hill Resort\, Shirsad\, Vasai-Virar\,
+  Maharashtra – 401303
+END:VEVENT
+END:VCALENDAR
