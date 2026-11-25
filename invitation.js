@@ -43,51 +43,90 @@
     try { await audio.play(); } catch { music.querySelector('span').textContent='Retry sound'; }
   };
 
-  const entrance=$('entrance'), curtains=$('curtains'), sheet=$('coupleSheet'), prompt=$('entrancePrompt');
-  let partAmount=0, entered=false, opening=false;
+  const entrance = $('entrance'), curtains = $('curtains'), sheet = $('coupleSheet');
+  const wax = $('wax'), envelope = $('envelope');
+  let partAmount = 0, curtainDrag = null, revealTimer, scrollTimer;
+  let entered = false, focusOnReveal = false;
+
   function drawCurtains(amount) {
-    partAmount=clamp(amount);
-    for(const curtain of curtains.children) curtain.style.transform='translateX(-'+(partAmount*99)+'%) scaleX('+(1-.16*partAmount)+')';
-    prompt.style.opacity=String(clamp(1-partAmount*2.25));
-    sheet.style.opacity=String(clamp((partAmount-.12)/.85));
+    partAmount = clamp(amount);
+    for (const curtain of curtains.children) {
+      curtain.style.transform = `translateX(-${partAmount * 99}%) scaleX(${1 - .16 * partAmount})`;
+    }
+    sheet.style.opacity = String(clamp((partAmount - .12) / .85));
   }
-  function finishEntrance(){
-    if(entered) return;
-    entered=true;curtains.classList.add('settling');drawCurtains(1);
-    entrance.classList.add('unveiled'); prompt.inert=true;prompt.setAttribute('aria-hidden','true');
-    curtains.style.pointerEvents='none';sheet.inert=false;sheet.removeAttribute('aria-hidden');
-    $('coupleTitle').focus({preventScroll:true});
+  function finishEntrance() {
+    clearTimeout(revealTimer);
+    entered = true;
+    curtains.classList.add('settling');
+    drawCurtains(1);
+    entrance.classList.add('unveiled');
+    sheet.inert = false;
+    sheet.removeAttribute('aria-hidden');
+    if (focusOnReveal || document.activeElement === curtains) $('coupleTitle').focus({preventScroll:true});
+    focusOnReveal = false;
+    curtains.inert = true;
+    curtains.style.pointerEvents = 'none';
   }
-  $('part').onclick=finishEntrance;
-  let curtainDrag=null;
-  curtains.onpointerdown=e=>{
-    if(entered||!e.isPrimary||e.button!==0)return;
+  function scheduleReveal() {
+    clearTimeout(revealTimer);
+    if (!entered && !curtainDrag) revealTimer = setTimeout(finishEntrance, motion.matches ? 0 : 190);
+  }
+  curtains.onclick = finishEntrance;
+  curtains.onpointerdown = e => {
+    if (entered || !e.isPrimary || e.button !== 0) return;
+    clearTimeout(revealTimer);
     curtains.classList.remove('settling');
-    curtainDrag={id:e.pointerId,x:e.clientX,dir:e.clientX<curtains.getBoundingClientRect().left+curtains.clientWidth/2?-1:1,start:partAmount};
+    const middle = curtains.getBoundingClientRect().left + curtains.clientWidth / 2;
+    curtainDrag = {id:e.pointerId, x:e.clientX, dir:e.clientX < middle ? -1 : 1, start:partAmount};
     curtains.setPointerCapture(e.pointerId);
   };
-  curtains.onpointermove=e=>{
-    if(curtainDrag?.id!==e.pointerId)return;
-    drawCurtains(curtainDrag.start+(e.clientX-curtainDrag.x)*curtainDrag.dir/(curtains.clientWidth*.4));
+  curtains.onpointermove = e => {
+    if (curtainDrag?.id === e.pointerId)
+      drawCurtains(curtainDrag.start + (e.clientX - curtainDrag.x) * curtainDrag.dir / (curtains.clientWidth * .4));
   };
-  function releaseCurtain(e){
-    if(curtainDrag?.id!==e.pointerId)return;
-    const distance=Math.abs(e.clientX-curtainDrag.x);curtainDrag=null;
-    if(e.type!=='pointercancel'&&(partAmount>.24||distance<4)){finishEntrance();return}
-    curtains.classList.add('settling');drawCurtains(0);
+  curtains.onpointerup = curtains.onpointercancel = e => {
+    if (curtainDrag?.id !== e.pointerId) return;
+    curtainDrag = null;
+    finishEntrance();
+  };
+
+  function resetEnvelope() {
+    clearTimeout(scrollTimer);
+    envelope.classList.remove('opening');
+    wax.removeAttribute('aria-busy');
   }
-  curtains.onpointerup=releaseCurtain;curtains.onpointercancel=releaseCurtain;
-  function openInvite(){
-    if(opening){entrance.scrollIntoView({behavior:behavior()});return;}
-    opening=true;$('envelope').classList.add('opening');
-    $('wax').disabled=true;$('openInvite').lastChild.textContent=' Enter the invitation';
-    document.querySelector('.seal-hint').style.visibility='hidden';
-    setTimeout(()=>{entrance.scrollIntoView({behavior:behavior()});(entered?$('coupleTitle'):$('part')).focus({preventScroll:true});},motion.matches?0:1460);
+  wax.onclick = () => {
+    if (wax.hasAttribute('aria-busy')) return;
+    wax.setAttribute('aria-busy','true');
+    envelope.classList.add('opening');
+    scrollTimer = setTimeout(() => {
+      focusOnReveal = true;
+      entrance.scrollIntoView({behavior:behavior(), block:'start'});
+      if (entered || !('IntersectionObserver' in window)) finishEntrance();
+    }, motion.matches ? 0 : 1080);
+  };
+
+  if ('IntersectionObserver' in window) {
+    const arrival = new IntersectionObserver(([entry]) => {
+      entrance.classList.toggle('in-view',entry.isIntersecting);
+      if (entry.isIntersecting) scheduleReveal();
+      else clearTimeout(revealTimer);
+    }, {rootMargin:'0px 0px -25% 0px'});
+    arrival.observe(entrance);
+    new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting && entry.boundingClientRect.bottom <= innerHeight / 2) resetEnvelope();
+    }, {rootMargin:'-10% 0px 0px 0px'}).observe(wax);
+  } else {
+    finishEntrance();
   }
-  $('wax').onclick=openInvite;$('openInvite').onclick=openInvite;
-  const petals=entrance.querySelector('.petals');
-  for(let i=0;i<7;i++){const petal=document.createElement('i');petal.style.left=(8+i*13)+'%';petal.style.setProperty('--delay',(-1.37*i)+'s');petals.append(petal);}
-  if('IntersectionObserver' in window){new IntersectionObserver(entries=>entrance.classList.toggle('in-view',entries[0].isIntersecting)).observe(entrance);}
+  const petals = entrance.querySelector('.petals');
+  for (let i=0;i<7;i++) {
+    const petal = document.createElement('i');
+    petal.style.left = (8 + i * 13) + '%';
+    petal.style.setProperty('--delay',(-1.37 * i) + 's');
+    petals.append(petal);
+  }
 
   const roll=$('roll'), tassel=$('tassel');
   let amount=0,rollDrag=null,suppressClick=false;
@@ -97,7 +136,7 @@
     roll.style.transition=animate&&!motion.matches?'height .45s ease':'none';
     roll.style.height=(minRoll+amount*(maxRoll-minRoll))+'px';
     roll.setAttribute('aria-hidden',String(amount<.98));
-    $('unroll').textContent=amount>.98?'Roll up the scroll':'Unroll the scroll';
+    $('unroll').textContent=amount>.98?'Hide details':'Ceremony details';
   }
   function toggleRoll(){setRoll(amount>.98?0:1,true);}
   tassel.onpointerdown=e=>{
@@ -154,7 +193,7 @@
     if(texture)ctx.drawImage(texture,0,0,648,400);
     ctx.strokeStyle='#735025';ctx.lineWidth=1;ctx.strokeRect(18,18,612,364);
     ctx.fillStyle='#553517';ctx.textAlign='center';ctx.font='italic 500 52px Cormorant,Georgia,serif';ctx.fillText('A note for you',324,210);
-    ctx.font='500 15px DM,Arial,sans-serif';ctx.fillText('S C R A T C H   T H E   F O I L',324,252);
+    ctx.strokeStyle='#795b32';ctx.beginPath();ctx.moveTo(288,241);ctx.lineTo(360,241);ctx.stroke();
   }
   paintFoil();
   const texture=new Image();texture.onload=()=>{paintFoil(texture);document.fonts?.ready.then(()=>paintFoil(texture));};
@@ -186,7 +225,7 @@
   function openDoors(){
     const open=!$('doorframe').classList.contains('doors-open');
     $('doorframe').classList.toggle('doors-open',open);$('address').inert=!open;$('address').setAttribute('aria-hidden',String(!open));
-    $('doorHit').hidden=open;$('openDoors').textContent=open?'Close the doors':'Open the doors';$('openDoors').setAttribute('aria-expanded',String(open));
+    $('doorHit').hidden=open;$('openDoors').textContent=open?'Hide address':'View address';$('openDoors').setAttribute('aria-expanded',String(open));
     if(open)$('address').querySelector('a').focus({preventScroll:true});
   }
   $('openDoors').onclick=openDoors;$('doorHit').onclick=openDoors;
